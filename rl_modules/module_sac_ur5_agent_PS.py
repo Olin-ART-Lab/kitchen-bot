@@ -43,7 +43,7 @@ class module_sac_ur5_agent_PS:
         print(args.robot_hidden_dim)
         print(self.args.save_model)
         print(self.args.save_data)
-        anchor_numpy = np.load('saved_anchors/Ur5Pos3Push1_Push4_task_state_k_means_128closest_mixed_anchors.npy')
+        anchor_numpy = np.load('anchors states path.npy')
         # be aware of dtype here, might be wrong
         anchor_tensor = torch.Tensor(anchor_numpy).to(self.device)
 
@@ -122,6 +122,7 @@ class module_sac_ur5_agent_PS:
                     # start to collect samples
                     for t in range(self.env_params['max_timesteps']):
                         with torch.no_grad():
+                            #breakpoint()
                             task_input_tensor, joins_tensor = self._preproc_inputs(obs, g, joins)
                             pi, _, _ = self.actor_network.sample(task_input_tensor, joins_tensor)
                             action = self._select_actions(pi)
