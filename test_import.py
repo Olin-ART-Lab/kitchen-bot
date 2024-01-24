@@ -19,4 +19,5 @@ class TFDatasetWrapper(Dataset):
         label = torch.tensor(label.numpy()).long()
         return image, label
     
-    print("Did the thing")
+pytorch_train_dataset = TFDatasetWrapper(dataset['train'])
+print("Did the thing")
