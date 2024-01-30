@@ -301,7 +301,7 @@ class Ur5Push1:
         reward = self.compute_reward(achieved_goal, desired_goal, None)
         done = True if reward == 0 else False
         info = {"is_success": self.is_success(achieved_goal, desired_goal)}
-        return self.get_obs(action[-1]), reward, done, info
+        return self.get_rgbd_obs_plus(action[-1]), reward, done, info
 
     def compute_reward(self, achieved_goal, desired_goal, info: Dict[str, Any]) -> Union[np.ndarray, float]:
         # the info: Dict[str, Any] is useless but cannot be deleted
@@ -328,6 +328,40 @@ class Ur5Push1:
         obs.update(self.robot.get_joint_obs())
 
         return obs
+    
+    def get_rgbd_obs_plus(self, gripper_open_length):
+        obs = dict()
+        print(isinstance(self.camera, Camera))
+        if isinstance(self.camera, Camera):
+            rgb, depth, seg = self.camera.shot()
+            obs.update(dict(rgb=rgb, depth=depth, seg=seg))
+            print(obs)
+        else:
+            assert self.camera is None
+            print("Cam is none")
+        #obs.update(self.robot.get_joint_obs())
+        print(obs)
+        achieved_goal = self.get_achieved_goal()
+        desired_goal = self.get_desired_goal()
+        arm_joint_pos = np.array(self.robot.get_arm_joint_obs()["positions"])
+        joint_pos = np.concatenate([arm_joint_pos, [gripper_open_length]])
+        object_position, object_rotation = p.getBasePositionAndOrientation(self._bodies_idx["object"])
+        object_position = np.array(object_position)
+        object_rotation = np.array(p.getEulerFromQuaternion(object_rotation))
+        # observation = np.concatenate(
+        #     [
+        #         object_position,
+        #         object_rotation,
+        #     ]
+        # )
+        object_state = object_position
+        return {
+            "observation_img": obs["rgb"].flatten(),
+            "object_state": object_state,
+            "joint_pos": joint_pos,
+            "achieved_goal": achieved_goal,
+            "desired_goal": desired_goal,
+        }
 
     def get_obs(self, gripper_open_length):
         # position, rotation of the object

@@ -71,7 +71,7 @@ class PyBullet:
         """Render.
 
         If mode is "human", make the rendering real-time. All other arguments are
-        unused. If mode is "rgb_array", return an RGB array of the scene.
+        unused. If mode is "rgb_array",f return an RGB array of the scene.
 
         Args:
             mode (str): "human" of "rgb_array". If "human", this method waits for the time necessary to have

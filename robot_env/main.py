@@ -19,7 +19,6 @@ def user_control_demo():
                     (0, 0, 0),
                     (0, 0, 1),
                     0.1, 5, (320, 320), 40)
-    camera = None
     UR5Robotiq85_pos = (-0.48, -0.1095, 0)
     UR5Robotiq85_ori = (0, 0, 0)
     # robot = Panda((0, 0.5, 0), (0, 0, math.pi))
@@ -50,13 +49,17 @@ def user_control_demo():
             # action = [0, 0, 0, 0, 0, 0, 0.0]
             # Obs comes from get_obs which contains task state info
             obs, reward, done, info = env.step(action, 'end')
-            observation = np.concatenate((obs["observation"],
+            #print(f"obs: {obs['observation_img']}")
+            #print(f"obs: {obs['object_state']}")
+            #print(f"desired: {obs['desired_goal']}")
+            #breakpoint()
+            observation = np.concatenate((obs["observation_img"],obs["object_state"],
                                          obs['desired_goal']), axis=0)
             all_obs.append(observation)
             # print(obs["joint_pos"][-1])
     #breakpoint()
     print(f"all_obs single index shape: {all_obs[1].size}") # all_obs is list of dictionaries
-    np.save("robot_env/task_states_push_new2.npy", all_obs, allow_pickle=True)
+    np.save("robot_env/task_states_push2.npy", all_obs, allow_pickle=True)
 
 
 
