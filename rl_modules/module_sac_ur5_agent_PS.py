@@ -1,5 +1,5 @@
 import torch
-import os
+import os, yaml
 from datetime import datetime
 import numpy as np
 from mpi4py import MPI
@@ -7,8 +7,10 @@ from mpi_utils.mpi_utils import sync_networks, sync_grads
 from rl_modules.module_replay_buffer import module_replay_buffer
 from rl_modules.module_sac_models_PS import GausPiNetwork, QNetwork
 from her_modules.her import her_sampler
+from robot_env.load_model import load_model
 import time
 from robot_env.utilities import distance
+from utils import Namespace
 import pybullet as p
 
 """
@@ -43,7 +45,7 @@ class module_sac_ur5_agent_PS:
         print(args.robot_hidden_dim)
         print(self.args.save_model)
         print(self.args.save_data)
-        anchor_numpy = np.load('anchors states path.npy')
+        anchor_numpy = np.load('/home/jess/kitchen-bot/robot_env/anchor_states_14_embeddings.npy')
         # be aware of dtype here, might be wrong
         anchor_tensor = torch.Tensor(anchor_numpy).to(self.device)
 
@@ -104,6 +106,13 @@ class module_sac_ur5_agent_PS:
         """
         reward_record = []
         success_rate_record = []
+        device = 'cuda:0'
+        with open('/home/jess/kitchen-bot/robot_env/train_bc.yaml', 'r') as f:
+            cfg = yaml.load(f, Loader=yaml.FullLoader)
+            cfg = Namespace(cfg)
+        vision_model = load_model(cfg)
+        vision_model.to(device)
+        vision_model.eval()
         # start to collect samples
         for epoch in range(self.args.n_epochs):
             for _ in range(self.args.n_cycles):
@@ -115,6 +124,8 @@ class module_sac_ur5_agent_PS:
                     ep_obs, ep_ag, ep_g, ep_actions, ep_joins = [], [], [], [], []
                     # reset the environment
                     observation = self.env.reset()
+                    # Compute embedding for each observation here
+                    # How do I ensure that write step() is being computed? 
                     obs = observation['observation']
                     ag = observation['achieved_goal']
                     g = observation['desired_goal']
@@ -128,8 +139,11 @@ class module_sac_ur5_agent_PS:
                             action = self._select_actions(pi)
                             # print(action)
                         # feed the actions into the environment
-                        observation_new, _, _, info = self.env.step(action, control_method=self.args.control_type)
-                        obs_new = observation_new['observation']
+                        # Compute embedding for each observation here
+                        # Maybe just append RGB Image to initial observation field, or create new one that gets
+                        # fed to network
+                        observation_new, _, _, info = self.env.step(action, control_method=self.args.control_type, model=vision_model)
+                        obs_new = observation_new['embedded_img']
                         ag_new = observation_new['achieved_goal']
                         joins_new = observation_new['joint_pos']
                         # append rollouts
@@ -226,7 +240,7 @@ class module_sac_ur5_agent_PS:
 
         return task_inputs, joins
 
-    # this function will choose action for the agent and do the exploration
+    # this function will choose action for the agentrobot_env/task_states_push1.npy robot_env/task_states_push2.npy and do the exploration
     def _select_actions(self, pi):
         action = pi.cpu().numpy().squeeze()
         # add the gaussian

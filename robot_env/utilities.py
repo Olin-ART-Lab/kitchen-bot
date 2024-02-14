@@ -90,6 +90,7 @@ class Camera:
         _w, _h, rgb, depth, seg = p.getCameraImage(self.width, self.height,
                                                    self.view_matrix, self.projection_matrix,
                                                    )
+        print(rgb)
         return rgb, depth, seg
 
     def rgbd_2_world_batch(self, depth):

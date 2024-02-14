@@ -58,7 +58,7 @@ class Ur5Push1:
         self.action_space_low = -1.0
         self.action_space_high = 1.0
         self.action_shape = 7
-        self.task_input_shape = 6  # 3+3 (obj_position)+goal_pos
+        self.task_input_shape = 409606  # 3+3 (obj_position)+goal_pos
         self.goal_pos_shape = 3
         self.distance_threshold = 0.05
         self.reward_type = "sparse"
@@ -301,7 +301,7 @@ class Ur5Push1:
         reward = self.compute_reward(achieved_goal, desired_goal, None)
         done = True if reward == 0 else False
         info = {"is_success": self.is_success(achieved_goal, desired_goal)}
-        return self.get_rgbd_obs_plus(action[-1]), reward, done, info
+        return self.get_obs(action[-1]), reward, done, info
 
     def compute_reward(self, achieved_goal, desired_goal, info: Dict[str, Any]) -> Union[np.ndarray, float]:
         # the info: Dict[str, Any] is useless but cannot be deleted
@@ -316,6 +316,19 @@ class Ur5Push1:
         d = self.distance(achieved_goal, desired_goal)
         return np.array(d < self.distance_threshold, dtype=np.float64)
 
+    def get_rgbd_obs(self):
+        # this function get the observation from camera
+        # includes rgb, depth, and segmentation image
+        obs = dict()
+        if isinstance(self.camera, Camera):
+            rgb, depth, seg = self.camera.shot()
+            obs.update(dict(rgb=rgb, depth=depth, seg=seg))
+        else:
+            assert self.camera is None
+        obs.update(self.robot.get_joint_obs())
+
+        return obs
+    
     def get_rgbd_obs(self):
         # this function get the observation from camera
         # includes rgb, depth, and segmentation image
@@ -357,6 +370,43 @@ class Ur5Push1:
         object_state = object_position
         return {
             "observation_img": obs["rgb"].flatten(),
+            "obs_img_2d": obs["rgb"],
+            "object_state": object_state,
+            "joint_pos": joint_pos,
+            "achieved_goal": achieved_goal,
+            "desired_goal": desired_goal,
+        }
+    
+    def get_rgbd_obs_plus_for_embeddings(self, gripper_open_length, vision_model):
+        obs = dict()
+        print(isinstance(self.camera, Camera))
+        if isinstance(self.camera, Camera):
+            rgb, depth, seg = self.camera.shot()
+            obs.update(dict(rgb=rgb, depth=depth, seg=seg))
+            print(obs)
+        else:
+            assert self.camera is None
+            print("Cam is none")
+        #obs.update(self.robot.get_joint_obs())
+        print(obs)
+        achieved_goal = self.get_achieved_goal()
+        desired_goal = self.get_desired_goal()
+        arm_joint_pos = np.array(self.robot.get_arm_joint_obs()["positions"])
+        joint_pos = np.concatenate([arm_joint_pos, [gripper_open_length]])
+        object_position, object_rotation = p.getBasePositionAndOrientation(self._bodies_idx["object"])
+        object_position = np.array(object_position)
+        object_rotation = np.array(p.getEulerFromQuaternion(object_rotation))
+        # observation = np.concatenate(
+        #     [
+        #         object_position,
+        #         object_rotation,
+        #     ]
+        # )
+        embedding = 0
+        object_state = object_position
+        return {
+            "embedded_obs":embedding,
+            "obs_img_2d": obs["rgb"],
             "object_state": object_state,
             "joint_pos": joint_pos,
             "achieved_goal": achieved_goal,

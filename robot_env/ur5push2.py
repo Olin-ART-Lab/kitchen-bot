@@ -302,7 +302,7 @@ class Ur5Push2:
         reward = self.compute_reward(achieved_goal, desired_goal, None)
         done = True if reward == 0 else False
         info = {"is_success": self.is_success(achieved_goal, desired_goal)}
-        return self.get_rgbd_obs_plus(action[-1]), reward, done, info
+        return self.get_obs(action[-1]), reward, done, info
 
     def compute_reward(self, achieved_goal, desired_goal, info: Dict[str, Any]) -> Union[np.ndarray, float]:
         # the info: Dict[str, Any] is useless but cannot be deleted
@@ -358,6 +358,7 @@ class Ur5Push2:
         object_state = object_position
         return {
             "observation_img": obs["rgb"].flatten(),
+            "obs_img_2d": obs["rgb"],
             "object_state": object_state,
             "joint_pos": joint_pos,
             "achieved_goal": achieved_goal,
