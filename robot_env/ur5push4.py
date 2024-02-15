@@ -5,10 +5,13 @@ import random
 import numpy as np
 import pybullet as p
 import pybullet_data
-
+from PIL import Image
+import torch
 # from robot_env.utilities import Models, Camera
 from robot_env.utilities import Models, Camera
 from collections import namedtuple
+from robot_env.load_model import preprocess_image
+
 # from attrdict import AttrDict
 from tqdm import tqdm
 from typing import Any, Dict, Iterator, Optional, Union
@@ -58,7 +61,7 @@ class Ur5Push4:
         self.action_space_low = -1.0
         self.action_space_high = 1.0
         self.action_shape = 7
-        self.task_input_shape = 6  # 3+3 (obj_position)+goal_pos
+        self.task_input_shape = 2054 # 3+3 (obj_position)+goal_pos
         self.goal_pos_shape = 3
         self.distance_threshold = 0.05
         self.reward_type = "sparse"
@@ -275,7 +278,7 @@ class Ur5Push4:
 
         return x, y, z, roll, pitch, yaw, gripper_opening_length
 
-    def step(self, action, control_method='joint', model=None):
+    def step(self, action, control_method='joint', model=None, transforms=None):
         """
         action: (x, y, z, roll, pitch, yaw, gripper_opening_length) for End Effector Position Control
                 (a1, a2, a3, a4, a5, a6, a7, gripper_opening_length) for Joint Position Control
@@ -301,7 +304,7 @@ class Ur5Push4:
         reward = self.compute_reward(achieved_goal, desired_goal, None)
         done = True if reward == 0 else False
         info = {"is_success": self.is_success(achieved_goal, desired_goal)}
-        return self.get_rgbd_obs_plus_embedding(action[-1], model), reward, done, info
+        return self.get_rgbd_obs_plus_embedding(action[-1], model, transforms), reward, done, info
 
     def compute_reward(self, achieved_goal, desired_goal, info: Dict[str, Any]) -> Union[np.ndarray, float]:
         # the info: Dict[str, Any] is useless but cannot be deleted
@@ -356,16 +359,16 @@ class Ur5Push4:
         
     def get_rgbd_obs_plus(self, gripper_open_length):
         obs = dict()
-        print(isinstance(self.camera, Camera))
+        #print(isinstance(self.camera, Camera))
         if isinstance(self.camera, Camera):
             rgb, depth, seg = self.camera.shot()
             obs.update(dict(rgb=rgb, depth=depth, seg=seg))
-            print(obs)
+            #print(obs)
         else:
             assert self.camera is None
             print("Cam is none")
         #obs.update(self.robot.get_joint_obs())
-        print(obs)
+        #print(obs)
         achieved_goal = self.get_achieved_goal()
         desired_goal = self.get_desired_goal()
         arm_joint_pos = np.array(self.robot.get_arm_joint_obs()["positions"])
@@ -390,18 +393,18 @@ class Ur5Push4:
             "desired_goal": desired_goal,
         }
     
-    def get_rgbd_obs_plus_embedding(self, gripper_open_length, model):
+    def get_rgbd_obs_plus_embedding(self, gripper_open_length, model, transforms):
         obs = dict()
-        print(isinstance(self.camera, Camera))
+        #print(isinstance(self.camera, Camera))
         if isinstance(self.camera, Camera):
             rgb, depth, seg = self.camera.shot()
             obs.update(dict(rgb=rgb, depth=depth, seg=seg))
-            print(obs)
+            #print(obs)
         else:
             assert self.camera is None
             print("Cam is none")
         #obs.update(self.robot.get_joint_obs())
-        print(obs)
+        #print(obs)
         achieved_goal = self.get_achieved_goal()
         desired_goal = self.get_desired_goal()
         arm_joint_pos = np.array(self.robot.get_arm_joint_obs()["positions"])
@@ -416,10 +419,16 @@ class Ur5Push4:
         #     ]
         # )
         object_state = object_position
-        embedded_img = model(obs["rgb"]).cpu().numpy()
+        #breakpoint()-benchmark.org/
+        img = Image.fromarray(obs["rgb"]) 
+        img = img.convert("RGB")
+        img = preprocess_image(img, transforms)  
+        with torch.no_grad():
+            img = img.unsqueeze(0).to('cuda:0')
+            embedding = model(img).cpu().numpy()
     
         return {
-            "embedded_img": embedded_img,
+            "embedded_img": embedding,
             "object_state": object_state,
             "joint_pos": joint_pos,
             "achieved_goal": achieved_goal,
@@ -487,7 +496,7 @@ class Ur5Push4:
             rgba_color=np.array([0.75, 0.75, 0.75, 1.0]),
         )
 
-    def reset(self):
+    def reset(self, vision_model, transforms):
         self.robot.reset()
         obj_orig = [0.0, 0.0, self.object_size / 2]
         obj_noise = np.random.uniform(self.obj_range_low, self.obj_range_high)
@@ -495,7 +504,7 @@ class Ur5Push4:
         goal_noise = np.random.uniform(self.goal_range_low, self.goal_range_high)
         p.resetBasePositionAndOrientation(self._bodies_idx["target"], goal_orig+goal_noise, np.array([0.0, 0.0, 0.0, 1.0]))
         p.resetBasePositionAndOrientation(self._bodies_idx["object"], obj_orig+obj_noise, np.array([0.0, 0.0, 0.0, 1.0]))
-        return self.get_obs(self.robot.gripper_range[1])
+        return self.get_rgbd_obs_plus_embedding(self.robot.gripper_range[1], model=vision_model, transforms=transforms)
 
     def close(self):
         p.disconnect(self.physicsClient)

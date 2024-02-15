@@ -4,7 +4,7 @@ from tqdm import tqdm
 from PIL import Image
 import yaml, argparse, os, pickle
 from utils import Namespace
-from toto_benchmark.vision import load_model, load_transforms, preprocess_image
+from pvr_model_loading import load_model, load_transforms, preprocess_image
 
 def precompute_embeddings(cfg, paths, data_path=None, from_files=False):
     device = 'cuda:0'

@@ -20,12 +20,14 @@ This version refers to the ASL code
 
 
 class module_sac_ur5_agent_PS:
-    def __init__(self, num_task_inputs, num_robot_inputs, args, env, env_params):
+    def __init__(self, num_task_inputs, num_robot_inputs, args, env, env_params, vision_model, transforms):
         print(num_task_inputs)
         self.args = args
         self.env = env
         self.env_params = env_params
         self.device = torch.device(args.device)
+        self.vision_model = vision_model
+        self.transforms = transforms
         # create the dict for store the model and data
         if MPI.COMM_WORLD.Get_rank() == 0:
             if not os.path.exists(self.args.save_dir):
@@ -107,13 +109,8 @@ class module_sac_ur5_agent_PS:
         reward_record = []
         success_rate_record = []
         device = 'cuda:0'
-        with open('/home/jess/kitchen-bot/robot_env/train_bc.yaml', 'r') as f:
-            cfg = yaml.load(f, Loader=yaml.FullLoader)
-            cfg = Namespace(cfg)
-        vision_model = load_model(cfg)
-        vision_model.to(device)
-        vision_model.eval()
         # start to collect samples
+        #embed here as well
         for epoch in range(self.args.n_epochs):
             for _ in range(self.args.n_cycles):
                 mb_obs, mb_ag, mb_g, mb_actions, mb_joins = [], [], [], [], []
@@ -123,10 +120,10 @@ class module_sac_ur5_agent_PS:
                     # reset the rollouts
                     ep_obs, ep_ag, ep_g, ep_actions, ep_joins = [], [], [], [], []
                     # reset the environment
-                    observation = self.env.reset()
+                    observation = self.env.reset(self.vision_model, self.transforms)
                     # Compute embedding for each observation here
                     # How do I ensure that write step() is being computed? 
-                    obs = observation['observation']
+                    obs = np.concatenate((observation['embedded_img'].squeeze().squeeze(),observation["object_state"]), axis=0)
                     ag = observation['achieved_goal']
                     g = observation['desired_goal']
                     joins = observation['joint_pos']
@@ -134,6 +131,7 @@ class module_sac_ur5_agent_PS:
                     for t in range(self.env_params['max_timesteps']):
                         with torch.no_grad():
                             #breakpoint()
+                            # embed img here too
                             task_input_tensor, joins_tensor = self._preproc_inputs(obs, g, joins)
                             pi, _, _ = self.actor_network.sample(task_input_tensor, joins_tensor)
                             action = self._select_actions(pi)
@@ -142,8 +140,8 @@ class module_sac_ur5_agent_PS:
                         # Compute embedding for each observation here
                         # Maybe just append RGB Image to initial observation field, or create new one that gets
                         # fed to network
-                        observation_new, _, _, info = self.env.step(action, control_method=self.args.control_type, model=vision_model)
-                        obs_new = observation_new['embedded_img']
+                        observation_new, _, _, info = self.env.step(action, control_method=self.args.control_type, model=self.vision_model, transforms=self.transforms)
+                        obs_new =  np.concatenate((observation_new['embedded_img'].squeeze(),observation_new["object_state"]), axis=0)
                         ag_new = observation_new['achieved_goal']
                         joins_new = observation_new['joint_pos']
                         # append rollouts
@@ -367,8 +365,8 @@ class module_sac_ur5_agent_PS:
         self.actor_network.eval()
         for _ in range(self.args.n_test_rollouts):
             per_success_rate = []
-            observation = self.env.reset()
-            obs = observation['observation']
+            observation = self.env.reset(self.vision_model, self.transforms)
+            obs =  np.concatenate((observation['embedded_img'].squeeze(),observation["object_state"]), axis=0)
             g = observation['desired_goal']
             joins = observation['joint_pos']
             reward_sum = 0
@@ -380,9 +378,9 @@ class module_sac_ur5_agent_PS:
                     pi, _ = self.actor_network(task_input_tensor, joins_tensor)
                     # convert the actions
                     actions = pi.detach().cpu().numpy().squeeze()
-                observation_new, reward, _, info = self.env.step(actions, control_method=self.args.control_type)
+                observation_new, reward, _, info = self.env.step(actions, control_method=self.args.control_type, model=self.vision_model, transforms=self.transforms)
                 reward_sum = reward_sum + reward
-                obs = observation_new['observation']
+                obs =  np.concatenate((observation_new['embedded_img'].squeeze(),observation_new["object_state"]), axis=0)
                 g = observation_new['desired_goal']
                 joins = observation_new['joint_pos']
                 per_success_rate.append(info['is_success'])
@@ -407,8 +405,8 @@ class module_sac_ur5_agent_PS:
 
         for _ in range(10):
             per_success_rate = []
-            observation = self.env.reset()
-            obs = observation['observation']
+            observation = self.env.reset(self.vision_model, self.transforms)
+            obs =  np.concatenate((observation['embedded_img'].squeeze(),observation["object_state"]), axis=0)
             g = observation['desired_goal']
             joins = observation['joint_pos']
             for t in range(self.env_params['max_timesteps']):
@@ -425,7 +423,7 @@ class module_sac_ur5_agent_PS:
                 observation_new, _, _, info = self.env.step(action, control_method=self.args.control_type)
                 time.sleep(0.01)
                 # self.env.render()
-                obs = observation_new['observation']
+                obs =  np.concatenate((observation_new['embedded_img'].squeeze(),observation_new["object_state"]), axis=0)
                 joins = observation_new['joint_pos']
                 per_success_rate.append(info['is_success'])
 
@@ -454,8 +452,8 @@ class module_sac_ur5_agent_PS:
         for _ in range(test_num):
             ini_success_flag = 0
             per_success_rate = []
-            observation = self.env.reset()
-            obs = observation['observation']
+            observation = self.env.reset(self.vision_model, self.transforms)
+            obs =  np.concatenate((observation['embedded_img'].squeeze(),observation["object_state"]), axis=0)
             g = observation['desired_goal']
             if distance(obs, g) < distance_threshold:
                 ini_success_num += 1
@@ -499,7 +497,7 @@ class module_sac_ur5_agent_PS:
                 observation_new, _, _, info = self.env.step(action, control_method=self.args.control_type)
                 time.sleep(0.05)  #0.02
                 # self.env.render()
-                obs = observation_new['observation']
+                obs =  np.concatenate((observation_new['embedded_img'].squeeze(),observation_new["object_state"]), axis=0)
                 joins = observation['joint_pos']
                 per_success_rate.append(info['is_success'])
 
@@ -537,8 +535,8 @@ class module_sac_ur5_agent_PS:
             for _ in range(test_num):
                 ini_success_flag = 0
                 per_success_rate = []
-                observation = self.env.reset()
-                obs = observation['observation']
+                observation = self.env.reset(self.vision_model, self.transforms)
+                obs =  np.concatenate((observation['embedded_img'].squeeze(),observation["object_state"]), axis=0)
                 g = observation['desired_goal']
                 if distance(obs, g) < distance_threshold:
                     ini_success_num += 1
@@ -564,7 +562,7 @@ class module_sac_ur5_agent_PS:
                     observation_new, _, _, info = self.env.step(action, control_method=self.args.control_type)
                     time.sleep(0.02)
                     # self.env.render()
-                    obs = observation_new['observation']
+                    obs =  np.concatenate((observation_new['embedded_img'].squeeze(),observation_new["object_state"]), axis=0)
                     joins = observation_new['joint_pos']
                     per_success_rate.append(info['is_success'])
 
@@ -602,8 +600,8 @@ class module_sac_ur5_agent_PS:
 
         for _ in range(200):
             per_success_rate = []
-            observation = self.env.reset()
-            obs = observation['observation']
+            observation = self.env.reset(self.vision_model, self.transforms)
+            obs =  np.concatenate((observation['embedded_img'].squeeze(),observation["object_state"]), axis=0)
             g = observation['desired_goal']
             joins = observation['joint_pos']
             for t in range(self.env_params['max_timesteps']):
@@ -621,7 +619,7 @@ class module_sac_ur5_agent_PS:
                 observation_new, _, _, info = self.env.step(action, control_method=self.args.control_type)
                 time.sleep(0.02)
                 # self.env.render()
-                obs = observation_new['observation']
+                obs =  np.concatenate((observation_new['embedded_img'].squeeze(),observation_new["object_state"]), axis=0)
                 joins = observation_new['joint_pos']
                 per_success_rate.append(info['is_success'])
 

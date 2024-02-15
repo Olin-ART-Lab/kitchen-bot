@@ -1,6 +1,6 @@
 import numpy as np
 import gym
-import os, sys
+import os, sys, yaml
 from sac_arguments import get_args
 from mpi4py import MPI
 from rl_modules.module_sac_ur5_agent_PS import module_sac_ur5_agent_PS
@@ -14,15 +14,20 @@ from robot_env.ur5push3 import Ur5Push3
 from robot_env.ur5push4 import Ur5Push4
 from robot_env.ur5l5push1 import Ur5L5Push1
 from robot_env.ur5l5push4 import Ur5L5Push4
+from robot_env.load_model import load_model, load_transforms
+import time
+from robot_env.utilities import distance
+from utils import Namespace
 
 """
 train the agent, the MPI part code is copy from openai baselines(https://github.com/openai/baselines/blob/master/baselines/her)
 Modular network with normalization layer at the input. Has relative representation using anchors.
 """
-def get_env_params(env):
-    obs = env.reset()
+def get_env_params(env, vision_model, transforms):
+    obs = env.reset(vision_model, transforms)
     # close the environment
-    params = {'obs': obs['observation'].shape[0],
+    observation = np.concatenate((obs['embedded_img'].squeeze(), obs['object_state']), axis=0)
+    params = {'obs': observation.shape[0],
             'goal': obs['desired_goal'].shape[0],
             'action': env.action_shape,
             'action_max': env.action_space_high,
@@ -37,7 +42,10 @@ def launch(args):
     ycb_models = YCBModels(
         os.path.join('./data/ycb', '**', 'textured-decmp.obj'),
     )
-    camera = None
+    camera = Camera((1, 1, 1),
+                    (0, 0, 0),
+                    (0, 0, 1),
+                    0.1, 5, (320, 320), 40)
     if args.env_name == "Ur5Push1":
         robot = UR5Robotiq85(pos=(-0.7, -0.1095, 0.0431), ori=(0, 0, 0))
         env = Ur5Push1(robot, ycb_models, camera, vis=False)
@@ -66,14 +74,20 @@ def launch(args):
     if args.device != 'cpu':
         torch.cuda.manual_seed_all(args.seed + MPI.COMM_WORLD.Get_rank())
         # torch.cuda.manual_seed(args.seed + MPI.COMM_WORLD.Get_rank())
-
+    with open('/home/jess/kitchen-bot/robot_env/train_bc.yaml', 'r') as f:
+        cfg = yaml.load(f, Loader=yaml.FullLoader)
+        cfg = Namespace(cfg)
+        vision_model = load_model(cfg)
+        vision_model.to(args.device)
+        vision_model.eval()
+    transforms = load_transforms(cfg)
     # get the environment parameters
-    env_params = get_env_params(env)
+    env_params = get_env_params(env, vision_model, transforms)
 
     print("------------")
     print(env.task_input_shape)
     print("------------")
-    sac_trainer = module_sac_ur5_agent_PS(env.task_input_shape, env_params['joins'], args, env, env_params)
+    sac_trainer = module_sac_ur5_agent_PS(env.task_input_shape, env_params['joins'], args, env, env_params, vision_model, transforms)
     sac_trainer.learn()
 
 if __name__ == '__main__':

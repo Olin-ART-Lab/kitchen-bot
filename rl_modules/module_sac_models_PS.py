@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -31,6 +32,7 @@ class TaskModule(nn.Module):
 
     def forward(self, task_state):
         # task_state has the size 256(batch size)*15
+        #breakpoint()
         task_anchor_state = torch.cat((task_state, self.anchor), 0)
         x = self.norm_input(task_anchor_state)
         x = F.relu(self.linear1(x))
@@ -143,6 +145,8 @@ class GausPiNetwork(nn.Module):
         return mean, log_std
 
     def sample(self, task_state, robot_state):
+        if torch.isnan(task_state).any():
+            breakpoint()
         mean, log_std = self.forward(task_state, robot_state)
         # mean = torch.nan_to_num(mean)
         # std = (log_std+epsilon).exp()

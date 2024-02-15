@@ -16,6 +16,9 @@ EMBEDDING_DIMS = {
 }
 
 def preprocess_image(image, transforms):
+    #print("here")
+    if type(image) == None:
+        breakpoint()
     if type(image) == np.ndarray:
         assert len(image.shape) == 3
         image = Image.fromarray(image)

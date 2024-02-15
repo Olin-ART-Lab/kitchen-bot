@@ -1,23 +1,21 @@
 import torch
 import tensorflow_datasets as tfds
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import IterableDataset, DataLoader
+import matplotlib.pyplot as plt
+from typing import Protocol, Sequence, Any
+from tqdm import tqdm
+import os
 
-dataset = tfds.load("bridge")
+class RandomAccessDataSource(Protocol):
+  """Interface for datasources where storage supports efficient random access."""
 
-class TFDatasetWrapper(Dataset):
-    def __init__(self, tf_dataset):
-        self.tf_dataset = tf_dataset
+  def __len__(self) -> int:
+    """Number of records in the dataset."""
 
-    def __len__(self):
-        return len(self.tf_dataset)
+  def __getitem__(self, record_key: int) -> Sequence[Any]:
+    """Retrieves records for the given record_keys."""
 
-    def __getitem__(self, idx):
-        # TensorFlow datasets yield tuples of (image, label)
-        image, label = self.tf_dataset[idx]
-        # Convert to PyTorch tensors
-        image = torch.from_numpy(image.numpy()).float()
-        label = torch.tensor(label.numpy()).long()
-        return image, label
-    
-pytorch_train_dataset = TFDatasetWrapper(dataset['train'])
-print("Did the thing")
+tf_dataset = tfds.load('bridge', split="train")
+
+ds = tfds.as_numpy(tfds.load('bridge'))
+ds_train = tfds.as_numpy(ds['train'])
