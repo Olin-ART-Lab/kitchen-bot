@@ -12,6 +12,9 @@ from collections import namedtuple
 # from attrdict import AttrDict
 from tqdm import tqdm
 from typing import Any, Dict, Iterator, Optional, Union
+from robot_env.utilities import Models, Camera
+from collections import namedtuple
+from robot_env.load_model import preprocess_image
 
 # this env is for pushing the cube on slippery (low friction)
 class Ur5Push1:
@@ -377,18 +380,19 @@ class Ur5Push1:
             "desired_goal": desired_goal,
         }
     
-    def get_rgbd_obs_plus_for_embeddings(self, gripper_open_length, vision_model):
+       
+    def get_rgbd_obs_plus_embedding(self, gripper_open_length, model, transforms):
         obs = dict()
-        print(isinstance(self.camera, Camera))
+        #print(isinstance(self.camera, Camera))
         if isinstance(self.camera, Camera):
             rgb, depth, seg = self.camera.shot()
             obs.update(dict(rgb=rgb, depth=depth, seg=seg))
-            print(obs)
+            #print(obs)
         else:
             assert self.camera is None
             print("Cam is none")
         #obs.update(self.robot.get_joint_obs())
-        print(obs)
+        #print(obs)
         achieved_goal = self.get_achieved_goal()
         desired_goal = self.get_desired_goal()
         arm_joint_pos = np.array(self.robot.get_arm_joint_obs()["positions"])
@@ -402,11 +406,17 @@ class Ur5Push1:
         #         object_rotation,
         #     ]
         # )
-        embedding = 0
         object_state = object_position
+        #breakpoint()-benchmark.org/
+        img = Image.fromarray(obs["rgb"]) 
+        img = img.convert("RGB")
+        img = preprocess_image(img, transforms)  
+        with torch.no_grad():
+            img = img.unsqueeze(0).to('cuda:0')
+            embedding = model(img).cpu().numpy()
+    
         return {
-            "embedded_obs":embedding,
-            "obs_img_2d": obs["rgb"],
+            "embedded_img": embedding,
             "object_state": object_state,
             "joint_pos": joint_pos,
             "achieved_goal": achieved_goal,
@@ -495,8 +505,8 @@ class Ur5Push1:
             position=np.array([-0.7, -0.1095, 0.0431 / 2]),
             rgba_color=np.array([0.75, 0.75, 0.75, 1.0]),
         )
-
-    def reset(self):
+    # sim deployment for testing
+    def reset(self, vision_model, transforms):
         self.robot.reset()
         obj_orig = [0.0, 0.0, self.object_size / 2]
         obj_noise = np.random.uniform(self.obj_range_low, self.obj_range_high)

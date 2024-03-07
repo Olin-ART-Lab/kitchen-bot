@@ -42,7 +42,7 @@ def get_args():
 
     # parser.add_argument('--device', type=int, default=0, help='which gpu to use')
     parser.add_argument("--device", help="PyTorch device to be use (ex: cpu, cuda...)", default="cuda:0", type=str)  # cuda:0
-    parser.add_argument('--task_hidden_dim', type=int, default=256, metavar='N',
+    parser.add_argument('--task_hidden_dim', type=int, default=1091, metavar='N',
                         help='task module hidden dimension (default: 64)')
     parser.add_argument('--robot_hidden_dim', type=int, default=256, metavar='N',
                         help='robot module hidden dimension (default: 64)')

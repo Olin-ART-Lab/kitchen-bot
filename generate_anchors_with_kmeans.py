@@ -10,7 +10,7 @@ task_state2 = np.load('robot_env/task_states_push4_embeddings.npy')
 task_state_mix = np.concatenate((task_state1, task_state2))
 print(task_state_mix.shape)
 
-kmeans = KMeans(n_clusters=128, random_state=0).fit(task_state_mix)
+kmeans = KMeans(n_clusters=2054, random_state=0).fit(task_state_mix)
 #
 center_anchors = kmeans.cluster_centers_ # Gets the center anchors
 # print(center_anchors)
@@ -24,7 +24,7 @@ center_anchors = np.load('kmeans_centers.npy') # Loads them
 closest, _ = pairwise_distances_argmin_min(center_anchors, task_state_mix) # Closest task states to centers- why?
 breakpoint()
 # 2054 for images, 6 for no images
-closest_anchors = np.zeros((128, 2054))
+closest_anchors = np.zeros((2054, 2054))
 print(f"closest size: {closest.shape}")
 print(f"Center anchors size {center_anchors.shape}")
 print(f"task state mix size: {task_state_mix.shape}")

@@ -1,4 +1,5 @@
 import numpy as np
+import wandb
 import gym
 import os, sys, yaml
 from sac_arguments import get_args
@@ -87,7 +88,9 @@ def launch(args):
     print("------------")
     print(env.task_input_shape)
     print("------------")
-    sac_trainer = module_sac_ur5_agent_PS(env.task_input_shape, env_params['joins'], args, env, env_params, vision_model, transforms)
+    run = wandb.init(project="Policy Stitching with Hidden Dim=1091", config={
+    "args": args})
+    sac_trainer = module_sac_ur5_agent_PS(env.task_input_shape, env_params['joins'], args, env, env_params, vision_model, transforms, run)
     sac_trainer.learn()
 
 if __name__ == '__main__':
