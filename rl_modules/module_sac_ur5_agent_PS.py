@@ -1,5 +1,6 @@
 import torch
 import os, yaml
+import wandb
 from datetime import datetime
 import numpy as np
 from mpi4py import MPI
@@ -20,7 +21,7 @@ This version refers to the ASL code
 
 
 class module_sac_ur5_agent_PS:
-    def __init__(self, num_task_inputs, num_robot_inputs, args, env, env_params, vision_model, transforms):
+    def __init__(self, num_task_inputs, num_robot_inputs, args, env, env_params, vision_model, transforms, run):
         print(num_task_inputs)
         self.args = args
         self.env = env
@@ -28,6 +29,8 @@ class module_sac_ur5_agent_PS:
         self.device = torch.device(args.device)
         self.vision_model = vision_model
         self.transforms = transforms
+        self.run = run
+        # Set the project where this run will be logged
         # create the dict for store the model and data
         if MPI.COMM_WORLD.Get_rank() == 0:
             if not os.path.exists(self.args.save_dir):
@@ -184,6 +187,7 @@ class module_sac_ur5_agent_PS:
             # print(MPI.COMM_WORLD.Get_rank())
             if MPI.COMM_WORLD.Get_rank() == 0:
                 print('[{}] epoch is: {}, eval success rate is: {:.3f}, reward is: {:.3f}'.format(datetime.now(), epoch, success_rate, mean_reward))
+                wandb.log({"epoch":epoch, "success rate":success_rate, "mean reward": mean_reward})
                 success_rate_record.append(success_rate)
                 reward_record.append(mean_reward)
                 if epoch % 10 == 0 and self.args.save_data is True:

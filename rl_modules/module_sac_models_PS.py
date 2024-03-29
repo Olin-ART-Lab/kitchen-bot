@@ -134,13 +134,14 @@ class GausPiNetwork(nn.Module):
         super(GausPiNetwork, self).__init__()
 
         self.Ptask = TaskModule(num_task_inputs, task_hidden_dim, interface_dim, anchor_tensor)
+        breakpoint()
         self.Probot = GausRobotPiModule(num_actions, num_robot_inputs, interface_dim, robot_hidden_dim, env_params)
 
         self.action_scale = torch.tensor(env_params['action_max'])
         self.action_bias = torch.tensor(0.)
 
     def forward(self, task_state, robot_state):
-        x = self.Ptask(task_state)
+        x = self.Ptask(task_state) # does forward pass of anchors and task - but does it pass the anchors through the robot module, too? 
         mean, log_std = self.Probot(robot_state, x)
         return mean, log_std
 
